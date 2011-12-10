@@ -1113,7 +1113,7 @@ fi
 
 ldap_plugin_dir=""
 ldap_lib=""
-if test -n "$OPENLDAP_PLUGIN"; then
+if test -n "$OPENLDAP_PLUGIN" -o -n "ENABLE_KRBLDAP"; then
   AC_CHECK_HEADERS(ldap.h lber.h, :, [AC_MSG_ERROR($ac_header not found)])
   AC_CHECK_LIB(ldap, ldap_init, :, [AC_MSG_ERROR(libldap not found or missing ldap_init)])
   old_LIBS="$LIBS"
