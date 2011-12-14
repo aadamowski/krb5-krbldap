@@ -51,6 +51,11 @@
 #endif
 #endif
 
+#ifdef KRB5_KRBLDAP
+#include <lber.h>
+#include <ldap.h>
+#endif
+
 #define MAX_PASS                    3
 #define DEFAULT_UDP_PREF_LIMIT   1465
 #define HARD_UDP_LIMIT          32700 /* could probably do 64K-epsilon ? */
@@ -335,10 +340,15 @@ krb5_sendto_kdc(krb5_context context, const krb5_data *message,
                            tcp_only ? SOCK_STREAM : 0);
     if (retval)
         return retval;
-
+#ifdef KRB5_KRBLDAP
+    retval = krbldap_sendto(context, message, &servers, socktype1, socktype2,
+                       NULL, reply, NULL, NULL, &server_used,
+                       check_for_svc_unavailable, &err);
+#else
     retval = k5_sendto(context, message, &servers, socktype1, socktype2,
                        NULL, reply, NULL, NULL, &server_used,
                        check_for_svc_unavailable, &err);
+#endif
     if (retval == KRB5_KDC_UNREACH) {
         if (err == KDC_ERR_SVC_UNAVAILABLE) {
             retval = KRB5KDC_ERR_SVC_UNAVAILABLE;
@@ -1352,3 +1362,28 @@ cleanup:
     free(sel_state);
     return retval;
 }
+#ifdef KRB5_KRBLDAP
+krb5_error_code
+krbldap_sendto(krb5_context context, const krb5_data *message,
+          const struct serverlist *servers, int socktype1, int socktype2,
+          struct sendto_callback_info* callback_info, krb5_data *reply,
+          struct sockaddr *remoteaddr, socklen_t *remoteaddrlen,
+          int *server_used,
+          /* return 0 -> keep going, 1 -> quit */
+          int (*msg_handler)(krb5_context, const krb5_data *, void *),
+          void *msg_handler_data)
+{
+    struct berval berval;
+    struct berval *retdata = NULL;
+    char *retoid = NULL;
+    int debug = 0xffffff;
+    int rc;
+    
+    berval.bv_len = message->length;
+    berval.bv_val = message->data;
+
+    ldap_set_option(NULL, LDAP_OPT_DEBUG_LEVEL, &debug);
+    rc = ldap_extended_operation_s(ldap, KRBLDAP_OID_EXOP_AS_REQ, &berval, NULL, NULL, &retoid, &retdata);
+    printf("exop rc: [%d]\n", rc);
+}
+#endif

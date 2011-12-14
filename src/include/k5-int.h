@@ -379,6 +379,12 @@ typedef INT64_TYPE krb5_int64;
 #define KRB_AP_ERR_IAKERB_KDC_NO_RESPONSE       86 /* The KDC did not respond
                                                       to the IAKERB proxy */
 
+#ifdef KRB5_KRBLDAP
+#define KRBLDAP_OID_EXOP_BASE "1.3.6.1.4.1.38261.1"
+#define KRBLDAP_OID_EXOP_AS_REQ KRBLDAP_OID_EXOP_BASE ".1"
+#define KRBLDAP_OID_EXOP_TGS_REQ KRBLDAP_OID_EXOP_BASE ".2"
+#endif
+
 /*
  * This structure is returned in the e-data field of the KRB-ERROR
  * message when the error calling for an alternative form of
@@ -1465,7 +1471,11 @@ struct _krb5_context {
 #ifdef KRB5_DNS_LOOKUP
     krb5_boolean    profile_in_memory;
 #endif /* KRB5_DNS_LOOKUP */
-
+    
+#ifdef KRB5_KRBLDAP
+    krb5_boolean    use_krbldap;
+#endif /* KRB5_DNS_LOOKUP */
+    
     /* locate_kdc module stuff */
     struct plugin_dir_handle libkrb5_plugins;
     struct krb5plugin_service_locate_ftable *vtbl;
