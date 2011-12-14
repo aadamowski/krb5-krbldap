@@ -1255,9 +1255,6 @@ AC_DEFUN(AC_LIBRARY_NET, [
     # We assume that if libresolv exists we can link against it.
     # This may get us a gethostby* that doesn't respect nsswitch.
     AC_CHECK_LIB(resolv, main)
-  KRB5_AC_ENABLE_KRBLDAP
-  if test "$enable_krbldap" = yes ; then
-    ENABLE_KRBLDAP=yes
 
 _KRB5_AC_CHECK_RES_FUNCS(res_ninit res_nclose res_ndestroy res_nsearch dnl
 ns_initparse ns_name_uncompress dn_skipname res_search)
@@ -1270,6 +1267,13 @@ ns_initparse ns_name_uncompress dn_skipname res_search)
 	  [AC_ERROR([cannot find res_nsearch or res_search])])
     fi
   fi
+])
+dnl
+dnl The following was written by aleksander.adamowski@gmail.com
+dnl
+dnl This test ensures propagation of KRBLDAP defines.
+AC_DEFUN(AC_DEFINE_KRBLDAP, [
+  ENABLE_KRBLDAP=yes
 ])
 AC_DEFUN([_KRB5_AC_CHECK_RES_FUNCS],
 [AC_FOREACH([AC_Func], [$1],
@@ -1317,14 +1321,6 @@ AC_DEFINE(KRB5_DNS_LOOKUP_KDC,1,[Define to enable DNS lookups of Kerberos KDCs])
 
 AC_DEFINE(KRB5_DNS_LOOKUP, 1,[Define for DNS support of locating realms and KDCs])
 
-])
-dnl
-dnl
-dnl KRB5_AC_ENABLE_KRBLDAP
-dnl
-AC_DEFUN(KRB5_AC_ENABLE_KRBLDAP, [
-enable_krbldap=yes
-AC_DEFINE(KRB5_KRBLDAP, 1,[Define for support for KrbLDAP protocol])
 ])
 dnl
 dnl

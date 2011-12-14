@@ -1113,7 +1113,7 @@ fi
 
 ldap_plugin_dir=""
 ldap_lib=""
-if test -n "$OPENLDAP_PLUGIN" -o -n "ENABLE_KRBLDAP"; then
+if test -n "$OPENLDAP_PLUGIN" -o -n "$ENABLE_KRBLDAP"; then
   AC_CHECK_HEADERS(ldap.h lber.h, :, [AC_MSG_ERROR($ac_header not found)])
   AC_CHECK_LIB(ldap, ldap_init, :, [AC_MSG_ERROR(libldap not found or missing ldap_init)])
   old_LIBS="$LIBS"
@@ -1133,16 +1133,24 @@ if test -n "$OPENLDAP_PLUGIN" -o -n "ENABLE_KRBLDAP"; then
       AC_ERROR("BER library missing - cannot build LDAP database module")
     fi
   fi
-  AC_DEFINE([ENABLE_LDAP], 1, [Define if LDAP KDB support within the Kerberos library (mainly ASN.1 code) should be enabled.])
-  AC_SUBST(LDAP_LIBS)
+  if test -n "$ENABLE_KRBLDAP"; then
+    AC_DEFINE(KRB5_KRBLDAP, 1,[Define for support for KrbLDAP protocol])
+    KRBLDAP=yes
+  else
+    KRBLDAP=no
+  fi
+  if test -n "$OPENLDAP_PLUGIN"; then
+    AC_DEFINE([ENABLE_LDAP], 1, [Define if LDAP KDB support within the Kerberos library (mainly ASN.1 code) should be enabled.])
 
-  K5_GEN_MAKEFILE(plugins/kdb/ldap)
-  K5_GEN_MAKEFILE(plugins/kdb/ldap/ldap_util)
-  K5_GEN_MAKEFILE(plugins/kdb/ldap/libkdb_ldap)
-  ldap_plugin_dir='plugins/kdb/ldap plugins/kdb/ldap/ldap_util'
-  LDAP=yes
-else
-  LDAP=no
+    K5_GEN_MAKEFILE(plugins/kdb/ldap)
+    K5_GEN_MAKEFILE(plugins/kdb/ldap/ldap_util)
+    K5_GEN_MAKEFILE(plugins/kdb/ldap/libkdb_ldap)
+    ldap_plugin_dir='plugins/kdb/ldap plugins/kdb/ldap/ldap_util'
+    LDAP=yes
+  else
+    LDAP=no
+  fi
+  AC_SUBST(LDAP_LIBS)
 fi
 AC_SUBST(ldap_plugin_dir)
 AC_SUBST(LDAP)
