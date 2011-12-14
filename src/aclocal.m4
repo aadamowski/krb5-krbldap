@@ -84,6 +84,7 @@ AC_SUBST_FILE(libnodeps_frag)
 dnl
 KRB5_AC_PRAGMA_WEAK_REF
 WITH_LDAP
+KRB5_AC_ENABLE_KRBLDAP
 KRB5_LIB_PARAMS
 KRB5_AC_INITFINI
 KRB5_AC_ENABLE_THREADS
@@ -1272,8 +1273,13 @@ dnl
 dnl The following was written by aleksander.adamowski@gmail.com
 dnl
 dnl This test ensures propagation of KRBLDAP defines.
-AC_DEFUN(AC_DEFINE_KRBLDAP, [
-  ENABLE_KRBLDAP=yes
+AC_DEFUN(KRB5_AC_ENABLE_KRBLDAP, [
+AC_ARG_ENABLE([krbldap],
+[  --enable-krbldap  enable DNS lookups of Kerberos realm names], ,
+[enable_krbldap=no])
+  if test "$enable_krbldap" = yes; then
+    ENABLE_KRBLDAP=yes
+  fi
 ])
 AC_DEFUN([_KRB5_AC_CHECK_RES_FUNCS],
 [AC_FOREACH([AC_Func], [$1],
