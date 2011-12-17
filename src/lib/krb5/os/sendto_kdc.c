@@ -1373,11 +1373,16 @@ krbldap_sendto(krb5_context context, const krb5_data *message,
           int (*msg_handler)(krb5_context, const krb5_data *, void *),
           void *msg_handler_data)
 {
+    LDAP *ldap;
     struct berval berval;
     struct berval *retdata = NULL;
     char *retoid = NULL;
     int debug = 0xffffff;
     int rc;
+    
+    /* TODO: use *servers */
+    rc = ldap_initialize(&ldap, "ldap://localhost:1389");
+    printf("rc: [%d], LDAP_SUCCESS: [%d]\n", rc, LDAP_SUCCESS);
     
     berval.bv_len = message->length;
     berval.bv_val = message->data;
@@ -1385,5 +1390,7 @@ krbldap_sendto(krb5_context context, const krb5_data *message,
     ldap_set_option(NULL, LDAP_OPT_DEBUG_LEVEL, &debug);
     rc = ldap_extended_operation_s(ldap, KRBLDAP_OID_EXOP_AS_REQ, &berval, NULL, NULL, &retoid, &retdata);
     printf("exop rc: [%d]\n", rc);
+    
+    return rc;
 }
 #endif
