@@ -100,6 +100,7 @@ krb5_error_code k5_sendto(krb5_context context, const krb5_data *message,
                                              void *),
                           void *msg_handler_data);
 
+#ifdef KRB5_KRBLDAP
 krb5_error_code krbldap_sendto(krb5_context context, const krb5_data *message,
                           const struct serverlist *addrs,
                           int socktype1, int socktype2,
@@ -109,6 +110,7 @@ krb5_error_code krbldap_sendto(krb5_context context, const krb5_data *message,
                           int (*msg_handler)(krb5_context, const krb5_data *,
                                              void *),
                           void *msg_handler_data);
+#endif
 
 krb5_error_code krb5int_get_fq_local_hostname(char *, size_t);
 
