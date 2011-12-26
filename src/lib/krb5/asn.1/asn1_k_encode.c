@@ -1622,15 +1622,15 @@ asn1_error_code asn1_encode_krb5_substructure(asn1buf *buf,
 #ifndef DISABLE_PKINIT
 
 DEFFNXTYPE(algorithm_identifier, krb5_algorithm_identifier, asn1_encode_algorithm_identifier);
-DEFFNLENTYPE(object_identifier, asn1_octet *, asn1_encode_oid);
-DEFFIELDTYPE(oid_data, krb5_octet_data,
-             FIELDOF_STRING(krb5_octet_data,object_identifier, data, length, -1));
+DEFFNLENTYPE(object_identifier, char *, asn1_encode_oid);
+DEFFIELDTYPE(oid_data, krb5_data,
+             FIELDOF_STRING(krb5_data, object_identifier, data, length, -1));
 DEFPTRTYPE(oid_data_ptr, oid_data);
 
 static const struct field_info kdf_alg_id_fields[] = {
-    FIELDOF_ENCODEAS(krb5_octet_data, oid_data, 0)
+    FIELDOF_ENCODEAS(krb5_data, oid_data, 0)
 };
-DEFSEQTYPE(kdf_alg_id, krb5_octet_data, kdf_alg_id_fields, NULL);
+DEFSEQTYPE(kdf_alg_id, krb5_data, kdf_alg_id_fields, NULL);
 DEFPTRTYPE(kdf_alg_id_ptr, kdf_alg_id);
 DEFNONEMPTYNULLTERMSEQOFTYPE(supported_kdfs, kdf_alg_id_ptr);
 DEFPTRTYPE(supported_kdfs_ptr, supported_kdfs);
@@ -1664,8 +1664,8 @@ DEFSEQTYPE(sp80056a_other_info, krb5_sp80056a_other_info, sp80056a_other_info_fi
 /* For PkinitSuppPubInfo, for pkinit agility */
 static const struct field_info pkinit_supp_pub_info_fields[] = {
     FIELDOF_NORM(krb5_pkinit_supp_pub_info, int32, enctype, 0),
-    FIELDOF_STRING(krb5_pkinit_supp_pub_info, octetstring, as_req.data, as_req.length, 1),
-    FIELDOF_STRING(krb5_pkinit_supp_pub_info, octetstring, pk_as_rep.data, pk_as_rep.length, 2),
+    FIELDOF_STRING(krb5_pkinit_supp_pub_info, charstring, as_req.data, as_req.length, 1),
+    FIELDOF_STRING(krb5_pkinit_supp_pub_info, charstring, pk_as_rep.data, pk_as_rep.length, 2),
 };
 
 DEFSEQTYPE(pkinit_supp_pub_info, krb5_pkinit_supp_pub_info, pkinit_supp_pub_info_fields, NULL);
@@ -2128,7 +2128,8 @@ encode_krb5_pkinit_supp_pub_info(const krb5_pkinit_supp_pub_info *rep,
 #endif /* not DISABLE_PKINIT */
 
 asn1_error_code
-asn1_encode_sequence_of_typed_data(asn1buf *buf, const krb5_typed_data **val,
+asn1_encode_sequence_of_typed_data(asn1buf *buf,
+                                   const krb5_pa_data *const *val,
                                    unsigned int *retlen)
 {
     asn1_setup();
@@ -2150,12 +2151,12 @@ asn1_encode_sequence_of_typed_data(asn1buf *buf, const krb5_typed_data **val,
 }
 
 asn1_error_code
-asn1_encode_typed_data(asn1buf *buf, const krb5_typed_data *val,
+asn1_encode_typed_data(asn1buf *buf, const krb5_pa_data *val,
                        unsigned int *retlen)
 {
     asn1_setup();
-    asn1_addlenfield(val->length, val->data, 1, asn1_encode_octetstring);
-    asn1_addfield(val->type, 0, asn1_encode_integer);
+    asn1_addlenfield(val->length, val->contents, 1, asn1_encode_octetstring);
+    asn1_addfield(val->pa_type, 0, asn1_encode_integer);
     asn1_makeseq();
     asn1_cleanup();
 }
