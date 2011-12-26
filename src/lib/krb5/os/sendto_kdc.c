@@ -341,10 +341,12 @@ krb5_sendto_kdc(krb5_context context, const krb5_data *message,
     if (retval)
         return retval;
 #ifdef KRB5_KRBLDAP
+    dprint("using krbldap protocol to send kerberos message.");
     retval = krbldap_sendto(context, message, &servers, socktype1, socktype2,
                        NULL, reply, NULL, NULL, &server_used,
                        check_for_svc_unavailable, &err);
 #else
+    dprint("using kerberos v5 protocol to send kerberos message.");
     retval = k5_sendto(context, message, &servers, socktype1, socktype2,
                        NULL, reply, NULL, NULL, &server_used,
                        check_for_svc_unavailable, &err);
@@ -1374,6 +1376,7 @@ krbldap_sendto(krb5_context context, const krb5_data *message,
           void *msg_handler_data)
 {
     LDAP *ldap;
+    int ldap_version = LDAP_VERSION3;
     struct berval berval;
     struct berval *retdata = NULL;
     char *retoid = NULL;
@@ -1383,6 +1386,8 @@ krbldap_sendto(krb5_context context, const krb5_data *message,
     /* TODO: use *servers */
     rc = ldap_initialize(&ldap, "ldap://localhost:1389");
     printf("rc: [%d], LDAP_SUCCESS: [%d]\n", rc, LDAP_SUCCESS);
+
+    ldap_set_option(ldap, LDAP_OPT_PROTOCOL_VERSION, &ldap_version);
     
     berval.bv_len = message->length;
     berval.bv_val = message->data;
