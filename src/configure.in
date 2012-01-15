@@ -1015,12 +1015,15 @@ int i = 1;
 fi
 if test "$k5_cv_openssl_version_okay" = yes && (test "$enable_pkinit" = yes || test "$enable_pkinit" = try); then
   K5_GEN_MAKEFILE(plugins/preauth/pkinit)
+  PKINIT=yes
 elif test "$k5_cv_openssl_version_okay" = no && test "$enable_pkinit" = yes; then
   AC_MSG_ERROR([Version of OpenSSL is too old; cannot enable PKINIT.])
 else
   AC_DEFINE([DISABLE_PKINIT], 1, [Define to disable PKINIT plugin support])
   AC_MSG_NOTICE([Disabling PKINIT support.])
+  PKINIT=no
 fi
+AC_SUBST(PKINIT)
 
 # for lib/apputils
 AC_REPLACE_FUNCS(daemon)
@@ -1248,6 +1251,8 @@ AC_SUBST([VERTO_CFLAGS])
 AC_SUBST([VERTO_LIBS])
 AC_SUBST([VERTO_VERSION])
 
+AC_PATH_PROG(GROFF, groff)
+
 AC_CONFIG_FILES(krb5-config, [chmod +x krb5-config])
 V5_AC_OUTPUT_MAKEFILE(.
 
@@ -1281,7 +1286,7 @@ dnl	lib/krb5/ccache/ccapi
 
 dnl	ccapi ccapi/lib ccapi/lib/unix ccapi/server ccapi/server/unix ccapi/test
 
-	kdc slave config-files gen-manpages include
+	kdc slave config-files gen-manpages man include
 
 	plugins/locate/python
 	plugins/kadm5_hook/test

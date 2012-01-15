@@ -386,18 +386,6 @@ typedef INT64_TYPE krb5_int64;
 #endif
 
 /*
- * This structure is returned in the e-data field of the KRB-ERROR
- * message when the error calling for an alternative form of
- * authentication is returned, KRB_AP_METHOD.
- */
-typedef struct _krb5_alt_method {
-    krb5_magic      magic;
-    krb5_int32      method;
-    unsigned int    length;
-    krb5_octet      *data;
-} krb5_alt_method;
-
-/*
  * A null-terminated array of this structure is returned by the KDC as
  * the data part of the ETYPE_INFO preauth type.  It informs the
  * client which encryption types are supported.
@@ -428,30 +416,6 @@ typedef struct _krb5_etype_list {
     krb5_enctype    *etypes;
 } krb5_etype_list;
 
-/*
- * a sam_challenge is returned for alternate preauth
- */
-/*
-  SAMFlags ::= BIT STRING {
-  use-sad-as-key[0],
-  send-encrypted-sad[1],
-  must-pk-encrypt-sad[2]
-  }
-*/
-/*
-  PA-SAM-CHALLENGE ::= SEQUENCE {
-  sam-type[0]                 INTEGER,
-  sam-flags[1]                SAMFlags,
-  sam-type-name[2]            GeneralString OPTIONAL,
-  sam-track-id[3]             GeneralString OPTIONAL,
-  sam-challenge-label[4]      GeneralString OPTIONAL,
-  sam-challenge[5]            GeneralString OPTIONAL,
-  sam-response-prompt[6]      GeneralString OPTIONAL,
-  sam-pk-for-sad[7]           EncryptionKey OPTIONAL,
-  sam-nonce[8]                INTEGER OPTIONAL,
-  sam-cksum[9]                Checksum OPTIONAL
-  }
-*/
 /* sam_type values -- informational only */
 #define PA_SAM_TYPE_ENIGMA     1   /*  Enigma Logic */
 #define PA_SAM_TYPE_DIGI_PATH  2   /*  Digital Pathways */
@@ -467,54 +431,6 @@ typedef struct _krb5_etype_list {
 #define PA_SAM_TYPE_EXP_BASE    128 /* experimental */
 #define PA_SAM_TYPE_GRAIL               (PA_SAM_TYPE_EXP_BASE+0) /* testing */
 #define PA_SAM_TYPE_SECURID_PREDICT     (PA_SAM_TYPE_EXP_BASE+1) /* special */
-
-typedef struct _krb5_predicted_sam_response {
-    krb5_magic      magic;
-    krb5_keyblock   sam_key;
-    krb5_flags      sam_flags; /* Makes key munging easier */
-    krb5_timestamp  stime;  /* time on server, for replay detection */
-    krb5_int32      susec;
-    krb5_principal  client;
-    krb5_data       msd;    /* mechanism specific data */
-} krb5_predicted_sam_response;
-
-typedef struct _krb5_sam_challenge {
-    krb5_magic      magic;
-    krb5_int32      sam_type; /* information */
-    krb5_flags      sam_flags; /* KRB5_SAM_* values */
-    krb5_data       sam_type_name;
-    krb5_data       sam_track_id;
-    krb5_data       sam_challenge_label;
-    krb5_data       sam_challenge;
-    krb5_data       sam_response_prompt;
-    krb5_data       sam_pk_for_sad;
-    krb5_int32      sam_nonce;
-    krb5_checksum   sam_cksum;
-} krb5_sam_challenge;
-
-typedef struct _krb5_sam_key {  /* reserved for future use */
-    krb5_magic      magic;
-    krb5_keyblock   sam_key;
-} krb5_sam_key;
-
-typedef struct _krb5_enc_sam_response_enc {
-    krb5_magic      magic;
-    krb5_int32      sam_nonce;
-    krb5_timestamp  sam_timestamp;
-    krb5_int32      sam_usec;
-    krb5_data       sam_sad;
-} krb5_enc_sam_response_enc;
-
-typedef struct _krb5_sam_response {
-    krb5_magic      magic;
-    krb5_int32      sam_type; /* informational */
-    krb5_flags      sam_flags; /* KRB5_SAM_* values */
-    krb5_data       sam_track_id; /* copied */
-    krb5_enc_data   sam_enc_key; /* krb5_sam_key - future use */
-    krb5_enc_data   sam_enc_nonce_or_ts; /* krb5_enc_sam_response_enc */
-    krb5_int32      sam_nonce;
-    krb5_timestamp  sam_patimestamp;
-} krb5_sam_response;
 
 typedef struct _krb5_sam_challenge_2 {
     krb5_data       sam_challenge_2_body;
@@ -1129,31 +1045,16 @@ void KRB5_CALLCONV krb5_preauth_request_context_init(krb5_context);
 void KRB5_CALLCONV krb5_preauth_request_context_fini(krb5_context);
 
 void KRB5_CALLCONV
-krb5_free_sam_challenge(krb5_context, krb5_sam_challenge *);
-
-void KRB5_CALLCONV
 krb5_free_sam_challenge_2(krb5_context, krb5_sam_challenge_2 *);
 
 void KRB5_CALLCONV
 krb5_free_sam_challenge_2_body(krb5_context, krb5_sam_challenge_2_body *);
 
 void KRB5_CALLCONV
-krb5_free_sam_response(krb5_context, krb5_sam_response *);
-
-void KRB5_CALLCONV
 krb5_free_sam_response_2(krb5_context, krb5_sam_response_2 *);
 
 void KRB5_CALLCONV
-krb5_free_predicted_sam_response(krb5_context, krb5_predicted_sam_response *);
-
-void KRB5_CALLCONV
-krb5_free_enc_sam_response_enc(krb5_context, krb5_enc_sam_response_enc *);
-
-void KRB5_CALLCONV
 krb5_free_enc_sam_response_enc_2(krb5_context, krb5_enc_sam_response_enc_2 *);
-
-void KRB5_CALLCONV
-krb5_free_sam_challenge_contents(krb5_context, krb5_sam_challenge *);
 
 void KRB5_CALLCONV
 krb5_free_sam_challenge_2_contents(krb5_context, krb5_sam_challenge_2 *);
@@ -1163,18 +1064,7 @@ krb5_free_sam_challenge_2_body_contents(krb5_context,
                                         krb5_sam_challenge_2_body *);
 
 void KRB5_CALLCONV
-krb5_free_sam_response_contents(krb5_context, krb5_sam_response *);
-
-void KRB5_CALLCONV
 krb5_free_sam_response_2_contents(krb5_context, krb5_sam_response_2 *);
-
-void KRB5_CALLCONV
-krb5_free_predicted_sam_response_contents(krb5_context,
-                                          krb5_predicted_sam_response * );
-
-void KRB5_CALLCONV
-krb5_free_enc_sam_response_enc_contents(krb5_context,
-                                        krb5_enc_sam_response_enc * );
 
 void KRB5_CALLCONV
 krb5_free_enc_sam_response_enc_2_contents(krb5_context,
@@ -1191,13 +1081,6 @@ krb5_free_s4u_userid_contents(krb5_context, krb5_s4u_userid *);
 
 void KRB5_CALLCONV
 krb5_free_pa_s4u_x509_user(krb5_context, krb5_pa_s4u_x509_user *);
-
-void KRB5_CALLCONV
-krb5_free_pa_svr_referral_data(krb5_context, krb5_pa_svr_referral_data *);
-
-void KRB5_CALLCONV
-krb5_free_pa_server_referral_data(krb5_context,
-                                  krb5_pa_server_referral_data * );
 
 void KRB5_CALLCONV
 krb5_free_pa_pac_req(krb5_context, krb5_pa_pac_req * );
@@ -1675,22 +1558,10 @@ krb5_error_code
 encode_krb5_authdata(krb5_authdata *const *rep, krb5_data **code);
 
 krb5_error_code
-encode_krb5_authdata_elt(const krb5_authdata *rep, krb5_data **code);
-
-krb5_error_code
-encode_krb5_pwd_sequence(const passwd_phrase_element *rep, krb5_data **code);
-
-krb5_error_code
-encode_krb5_pwd_data(const krb5_pwd_data *rep, krb5_data **code);
-
-krb5_error_code
 encode_krb5_padata_sequence(krb5_pa_data *const *rep, krb5_data **code);
 
 krb5_error_code
-encode_krb5_typed_data(const krb5_pa_data *const *rep, krb5_data **code);
-
-krb5_error_code
-encode_krb5_alt_method(const krb5_alt_method *, krb5_data **code);
+encode_krb5_typed_data(krb5_pa_data *const *rep, krb5_data **code);
 
 krb5_error_code
 encode_krb5_etype_info(krb5_etype_info_entry *const *, krb5_data **code);
@@ -1700,19 +1571,6 @@ encode_krb5_etype_info2(krb5_etype_info_entry *const *, krb5_data **code);
 
 krb5_error_code
 encode_krb5_pa_enc_ts(const krb5_pa_enc_ts *, krb5_data **);
-
-krb5_error_code
-encode_krb5_sam_challenge(const krb5_sam_challenge * , krb5_data **);
-
-krb5_error_code
-encode_krb5_sam_key(const krb5_sam_key * , krb5_data **);
-
-krb5_error_code
-encode_krb5_enc_sam_response_enc(const krb5_enc_sam_response_enc *,
-                                 krb5_data **);
-
-krb5_error_code
-encode_krb5_sam_response(const krb5_sam_response *, krb5_data **);
 
 krb5_error_code
 encode_krb5_sam_challenge_2(const krb5_sam_challenge_2 * , krb5_data **);
@@ -1727,10 +1585,6 @@ encode_krb5_enc_sam_response_enc_2(const krb5_enc_sam_response_enc_2 *,
 
 krb5_error_code
 encode_krb5_sam_response_2(const krb5_sam_response_2 * , krb5_data **);
-
-krb5_error_code
-encode_krb5_predicted_sam_response(const krb5_predicted_sam_response *,
-                                   krb5_data **);
 
 struct krb5_setpw_req {
     krb5_principal target;
@@ -1747,14 +1601,6 @@ encode_krb5_s4u_userid(const krb5_s4u_userid *, krb5_data **);
 
 krb5_error_code
 encode_krb5_pa_s4u_x509_user(const krb5_pa_s4u_x509_user *, krb5_data **);
-
-krb5_error_code
-encode_krb5_pa_svr_referral_data(const krb5_pa_svr_referral_data *,
-                                 krb5_data **);
-
-krb5_error_code
-encode_krb5_pa_server_referral_data(const krb5_pa_server_referral_data *,
-                                    krb5_data **);
 
 krb5_error_code
 encode_krb5_pa_pac_req(const krb5_pa_pac_req *, krb5_data **);
@@ -1792,23 +1638,6 @@ encode_krb5_ad_signedpath_data(const krb5_ad_signedpath_data *, krb5_data **);
 /*************************************************************************
  * End of prototypes for krb5_encode.c
  *************************************************************************/
-
-krb5_error_code
-decode_krb5_sam_challenge(const krb5_data *, krb5_sam_challenge **);
-
-krb5_error_code
-decode_krb5_enc_sam_key(const krb5_data *, krb5_sam_key **);
-
-krb5_error_code
-decode_krb5_enc_sam_response_enc(const krb5_data *,
-                                 krb5_enc_sam_response_enc **);
-
-krb5_error_code
-decode_krb5_sam_response(const krb5_data *, krb5_sam_response **);
-
-krb5_error_code
-decode_krb5_predicted_sam_response(const krb5_data *,
-                                   krb5_predicted_sam_response **);
 
 krb5_error_code
 decode_krb5_sam_challenge_2(const krb5_data *, krb5_sam_challenge_2 **);
@@ -1908,19 +1737,10 @@ krb5_error_code
 decode_krb5_authdata(const krb5_data *output, krb5_authdata ***rep);
 
 krb5_error_code
-decode_krb5_pwd_sequence(const krb5_data *output, passwd_phrase_element **rep);
-
-krb5_error_code
-decode_krb5_pwd_data(const krb5_data *output, krb5_pwd_data **rep);
-
-krb5_error_code
 decode_krb5_padata_sequence(const krb5_data *output, krb5_pa_data ***rep);
 
 krb5_error_code
 decode_krb5_typed_data(const krb5_data *, krb5_pa_data ***);
-
-krb5_error_code
-decode_krb5_alt_method(const krb5_data *output, krb5_alt_method **rep);
 
 krb5_error_code
 decode_krb5_etype_info(const krb5_data *output, krb5_etype_info_entry ***rep);
@@ -1935,9 +1755,6 @@ krb5_error_code
 decode_krb5_pa_enc_ts(const krb5_data *output, krb5_pa_enc_ts **rep);
 
 krb5_error_code
-decode_krb5_sam_key(const krb5_data *, krb5_sam_key **);
-
-krb5_error_code
 decode_krb5_setpw_req(const krb5_data *, krb5_data **, krb5_principal *);
 
 krb5_error_code
@@ -1945,14 +1762,6 @@ decode_krb5_pa_for_user(const krb5_data *, krb5_pa_for_user **);
 
 krb5_error_code
 decode_krb5_pa_s4u_x509_user(const krb5_data *, krb5_pa_s4u_x509_user **);
-
-krb5_error_code
-decode_krb5_pa_svr_referral_data(const krb5_data *,
-                                 krb5_pa_svr_referral_data **);
-
-krb5_error_code
-decode_krb5_pa_server_referral_data(const krb5_data *,
-                                    krb5_pa_server_referral_data **);
 
 krb5_error_code
 decode_krb5_pa_pac_req(const krb5_data *, krb5_pa_pac_req **);
@@ -2157,19 +1966,9 @@ void krb5int_free_srv_dns_data(struct srv_dns_entry *);
 /* To keep happy libraries which are (for now) accessing internal stuff */
 
 /* Make sure to increment by one when changing the struct */
-#define KRB5INT_ACCESS_STRUCT_VERSION 19
+#define KRB5INT_ACCESS_STRUCT_VERSION 20
 
-#ifndef ANAME_SZ
-struct ktext;                   /* from krb.h, for krb524 support */
-#endif
 typedef struct _krb5int_access {
-    /* crypto stuff */
-    krb5_error_code (*arcfour_gsscrypt)(const krb5_keyblock *keyblock,
-                                        krb5_keyusage usage,
-                                        const krb5_data *kd_data,
-                                        krb5_crypto_iov *data,
-                                        size_t num_data);
-
     krb5_error_code (*auth_con_get_subkey_enctype)(krb5_context,
                                                    krb5_auth_context,
                                                    krb5_enctype *);
@@ -2284,27 +2083,12 @@ typedef struct _krb5int_access {
                                          ***);
 
     krb5_error_code
-    (*decode_krb5_as_req)(const krb5_data *output, krb5_kdc_req **rep);
-
-    krb5_error_code
     (*encode_krb5_kdc_req_body)(const krb5_kdc_req *rep, krb5_data **code);
 
     void
     (KRB5_CALLCONV *free_kdc_req)(krb5_context, krb5_kdc_req * );
     void
     (*set_prompt_types)(krb5_context, krb5_prompt_type *);
-
-    krb5_error_code
-    (*encode_krb5_authdata_elt)(const krb5_authdata *rep, krb5_data **code);
-
-    /* Exported for testing only!  */
-    krb5_error_code
-    (*encode_krb5_sam_response_2)(const krb5_sam_response_2 *rep,
-                                  krb5_data **code);
-    krb5_error_code
-    (*encode_krb5_enc_sam_response_enc_2)(const
-                                          krb5_enc_sam_response_enc_2 *rep,
-                                          krb5_data **code);
 } krb5int_access;
 
 #define KRB5INT_ACCESS_VERSION                                          \
@@ -2617,12 +2401,6 @@ void KRB5_CALLCONV krb5_free_cred(krb5_context, krb5_cred *);
 void KRB5_CALLCONV krb5_free_cred_enc_part(krb5_context, krb5_cred_enc_part *);
 void KRB5_CALLCONV krb5_free_pa_data(krb5_context, krb5_pa_data **);
 void KRB5_CALLCONV krb5_free_tkt_authent(krb5_context, krb5_tkt_authent *);
-void KRB5_CALLCONV krb5_free_pwd_data(krb5_context, krb5_pwd_data *);
-void KRB5_CALLCONV krb5_free_pwd_sequences(krb5_context,
-                                           passwd_phrase_element **);
-void KRB5_CALLCONV krb5_free_passwd_phrase_element(krb5_context,
-                                                   passwd_phrase_element *);
-void KRB5_CALLCONV krb5_free_alt_method(krb5_context, krb5_alt_method *);
 void KRB5_CALLCONV krb5_free_enc_data(krb5_context, krb5_enc_data *);
 krb5_error_code krb5_set_config_files(krb5_context, const char **);
 
@@ -2708,20 +2486,6 @@ krb5_error_code krb5_set_debugging_time(krb5_context, krb5_timestamp,
 krb5_error_code krb5_use_natural_time(krb5_context);
 krb5_error_code krb5_set_time_offsets(krb5_context, krb5_timestamp,
                                       krb5_int32);
-/*
- * The realm iterator functions
- */
-
-krb5_error_code KRB5_CALLCONV
-krb5_realm_iterator_create(krb5_context context, void **iter_p);
-
-krb5_error_code KRB5_CALLCONV
-krb5_realm_iterator(krb5_context context, void **iter_p, char **ret_realm);
-
-void KRB5_CALLCONV
-krb5_realm_iterator_free(krb5_context context, void **iter_p);
-
-void KRB5_CALLCONV krb5_free_realm_string(krb5_context context, char *str);
 
 /* Internal principal function used by KIM to avoid code duplication */
 krb5_error_code KRB5_CALLCONV

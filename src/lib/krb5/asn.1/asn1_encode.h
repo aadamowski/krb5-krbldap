@@ -30,6 +30,7 @@
 #include "k5-int.h"
 #include "krbasn1.h"
 #include "asn1buf.h"
+#include "asn1_get.h"
 #include <time.h>
 
 /*
@@ -43,11 +44,9 @@
  *   asn1_encode_boolean
  *   asn1_encode_integer
  *   asn1_encode_unsigned_integer
- *   asn1_encode_octetstring
+ *   asn1_encode_bytestring
  *   asn1_encode_generaltime
- *   asn1_encode_generalstring
  *   asn1_encode_bitstring
- *   asn1_encode_oid
  */
 
 asn1_error_code asn1_encode_boolean(asn1buf *buf, asn1_intmax val,
@@ -63,9 +62,6 @@ asn1_error_code asn1_encode_integer(asn1buf *buf, asn1_intmax val,
  *            to expand the buffer.
  */
 
-asn1_error_code asn1_encode_enumerated(asn1buf *buf, long val,
-                                       unsigned int *retlen);
-
 asn1_error_code asn1_encode_unsigned_integer(asn1buf *buf, asn1_uintmax val,
                                              unsigned int *retlen);
 /*
@@ -77,24 +73,8 @@ asn1_error_code asn1_encode_unsigned_integer(asn1buf *buf, asn1_uintmax val,
  *            to expand the buffer.
  */
 
-asn1_error_code asn1_encode_octetstring(asn1buf *buf, unsigned int len,
-                                        const void *val, unsigned int *retlen);
-/*
- * requires  *buf is allocated
- * modifies  *buf, *retlen
- * effects   Inserts the encoding of val into *buf and returns
- *            the length of the encoding in *retlen.
- *           Returns ENOMEM to signal an unsuccesful attempt
- *            to expand the buffer.
- */
-#define asn1_encode_charstring asn1_encode_octetstring
-
-/**
- * Encode @a val, an object identifier in compressed DER form without a tag or
- * length. This function adds the OID tag and length.
- */
-asn1_error_code asn1_encode_oid(asn1buf *buf, unsigned int len,
-                                const void *val, unsigned int *retlen);
+asn1_error_code asn1_encode_bytestring(asn1buf *buf, unsigned int len,
+                                       const void *val, unsigned int *retlen);
 /*
  * requires  *buf is allocated
  * modifies  *buf, *retlen
@@ -114,28 +94,6 @@ asn1_error_code asn1_encode_null(asn1buf *buf, int *retlen);
  *            to expand the buffer.
  */
 
-asn1_error_code asn1_encode_printablestring(asn1buf *buf, unsigned int len,
-                                            const char *val, int *retlen);
-/*
- * requires  *buf is allocated
- * modifies  *buf, *retlen
- * effects   Inserts the encoding of val into *buf and returns
- *            the length of the encoding in *retlen.
- *           Returns ENOMEM to signal an unsuccesful attempt
- *            to expand the buffer.
- */
-
-asn1_error_code asn1_encode_ia5string(asn1buf *buf, unsigned int len,
-                                      const char *val, int *retlen);
-/*
- * requires  *buf is allocated
- * modifies  *buf, *retlen
- * effects   Inserts the encoding of val into *buf and returns
- *            the length of the encoding in *retlen.
- *           Returns ENOMEM to signal an unsuccesful attempt
- *            to expand the buffer.
- */
-
 asn1_error_code asn1_encode_generaltime(asn1buf *buf, time_t val,
                                         unsigned int *retlen);
 /*
@@ -148,33 +106,9 @@ asn1_error_code asn1_encode_generaltime(asn1buf *buf, time_t val,
  * Note: The encoding of GeneralizedTime is YYYYMMDDhhmmZ
  */
 
-asn1_error_code asn1_encode_generalstring(asn1buf *buf,
-                                          unsigned int len, const void *val,
-                                          unsigned int *retlen);
-/*
- * requires  *buf is allocated,  val has a length of len characters
- * modifies  *buf, *retlen
- * effects   Inserts the encoding of val into *buf and returns
- *            the length of the encoding in *retlen.
- *           Returns ENOMEM to signal an unsuccesful attempt
- *            to expand the buffer.
- */
-
 asn1_error_code asn1_encode_bitstring(asn1buf *buf, unsigned int len,
                                       const void *val,
                                       unsigned int *retlen);
-/*
- * requires  *buf is allocated,  val has a length of len characters
- * modifies  *buf, *retlen
- * effects   Inserts the encoding of val into *buf and returns
- *            the length of the encoding in *retlen.
- *           Returns ENOMEM to signal an unsuccesful attempt
- *            to expand the buffer.
- */
-
-asn1_error_code asn1_encode_opaque(asn1buf *buf, unsigned int len,
-                                   const void *val,
-                                   unsigned int *retlen);
 /*
  * requires  *buf is allocated,  val has a length of len characters
  * modifies  *buf, *retlen
@@ -226,15 +160,31 @@ enum atype_type {
      * invalid.
      */
     atype_min = 1,
-    /* Encoder function to be called with address of <thing>.  */
+    /* Encoder function (contents-only) to be called with address of <thing>
+     * and wrapped with a universal primitive tag.  tinfo is a struct
+     * primitive_info *. */
+    atype_primitive,
+    /*
+     * Encoder function to be called with address of <thing>.  The encoder
+     * function must generate a sequence without the sequence tag.  tinfo is a
+     * struct fn_info *.  Used only by kdc_req_body.
+     */
     atype_fn,
     /*
-     * Encoder function to be called with address of <thing> and a
-     * length (unsigned int).
+     * Encoder function (contents only) to be called with address of <thing>
+     * and a length (unsigned int), and wrapped with a universal primitive tag.
+     * tinfo is a struct string_info *.  Only usable with the field_string
+     * field type.
      */
-    atype_fn_len,
+    atype_string,
     /*
-     * Pointer to actual thing to be encoded.
+     * Pre-made DER encoding stored at the address of <thing>.  tinfo is a
+     * struct ptr_info * with the basetype field ignored.  Only usable with the
+     * field_der field type.
+     */
+    atype_der,
+    /*
+     * Pointer to actual thing to be encoded.  tinfo is a struct ptr_info *.
      *
      * Most of the fields are related only to the C type -- size, how
      * to fetch a pointer in a type-safe fashion -- but since the base
@@ -245,63 +195,71 @@ enum atype_type {
      * Must not refer to atype_fn_len.
      */
     atype_ptr,
-    /* Sequence, with pointer to sequence descriptor header.  */
+    /* Sequence.  tinfo is a struct seq_info *. */
     atype_sequence,
+    /*
+     * Choice.  tinfo is a struct seq_info *, with the optional field ignored.
+     * Only usable with the field_choice field type.  Cannot be used with an
+     * implicit context tag.
+     */
+    atype_choice,
     /*
      * Sequence-of, with pointer to base type descriptor, represented
      * as a null-terminated array of pointers (and thus the "base"
-     * type descriptor is actually an atype_ptr node).
+     * type descriptor is actually an atype_ptr node).  tinfo is a
+     * struct atype_info * giving the base type.
      */
     atype_nullterm_sequence_of,
     atype_nonempty_nullterm_sequence_of,
     /*
-     * Encode this object using a single field descriptor.  This may
-     * mean the atype/field breakdown needs revision....
+     * Encode this object using a single field descriptor.  tinfo is a struct
+     * field_info *.  The presence of this type may mean the atype/field
+     * breakdown needs revision....
      *
      * Main expected uses: Encode realm component of principal as a
      * GENERALSTRING.  Pluck data and length fields out of a structure
      * and encode a counted SEQUENCE OF.
      */
     atype_field,
-    /* Tagged version of another type.  */
+    /* Tagged version of another type.  tinfo is a struct tagged_info *. */
     atype_tagged_thing,
-    /* Integer types.  */
+    /* Signed or unsigned integer.  tinfo is NULL. */
     atype_int,
     atype_uint,
     /* Unused except for bounds checking.  */
     atype_max
 };
 
-/*
- * Initialized structures could be a lot smaller if we could use C99
- * designated initializers, and a union for all the type-specific
- * stuff.  Maybe use the hack we use for krb5int_access, where we use
- * a run-time initialize if the compiler doesn't support designated
- * initializers?  That's a lot of work here, though, with so many
- * little structures.  Maybe if/when these get auto-generated.
- */
 struct atype_info {
     enum atype_type type;
-    /* used for sequence-of processing */
-    unsigned int size;
-    /* atype_fn */
+    size_t size;                /* Used for sequence-of processing */
+    const void *tinfo;          /* Points to type-specific structure */
+};
+
+struct primitive_info {
     asn1_error_code (*enc)(asn1buf *, const void *, unsigned int *);
-    /* atype_fn_len */
+    unsigned int tagval;
+};
+
+struct fn_info {
+    asn1_error_code (*enc)(asn1buf *, const void *, taginfo *);
+};
+
+struct string_info {
     asn1_error_code (*enclen)(asn1buf *, unsigned int, const void *,
                               unsigned int *);
-    /* atype_ptr, atype_fn_len */
     const void *(*loadptr)(const void *);
-    /* atype_ptr, atype_nullterm_sequence_of */
+    unsigned int tagval;
+};
+
+struct ptr_info {
+    const void *(*loadptr)(const void *);
     const struct atype_info *basetype;
-    /* atype_sequence */
-    const struct seq_info *seq;
-    /* atype_field */
-    const struct field_info *field;
-    /* atype_tagged_thing */
-    unsigned int tagval : 8, tagtype : 8, construction:8;
-    /* atype_[u]int */
-    asn1_intmax (*loadint)(const void *);
-    asn1_uintmax (*loaduint)(const void *);
+};
+
+struct tagged_info {
+    unsigned int tagval : 16, tagtype : 8, construction : 6, implicit : 1;
+    const struct atype_info *basetype;
 };
 
 /*
@@ -310,7 +268,10 @@ struct atype_info {
  * + Define a type named aux_typedefname_##DESCNAME, for use in any
  *   types derived from the type being defined.
  *
- * + Define an atype_info struct named krb5int_asn1type_##DESCNAME.
+ * + Define an atype_info struct named krb5int_asn1type_##DESCNAME
+ *
+ * + Define a type-specific structure, referenced by the tinfo field
+ *   of the atype_info structure.
  *
  * + Define any extra stuff needed in the type descriptor, like
  *   pointer-load functions.
@@ -322,36 +283,38 @@ struct atype_info {
  */
 
 /*
- * Define a type for which we must use an explicit encoder function.
- * The DEFFNTYPE variant uses a function taking a void*, the
- * DEFFNXTYPE form wants a function taking a pointer to the actual C
- * type to be encoded; you should use the latter unless you've already
- * got the void* function supplied elsewhere.
+ * Define a type using a primitive (content-only) encoder function.
  *
- * Of course, we need a single, consistent type for the descriptor
- * structure field, so we use the function pointer type that uses
- * void*, and create a wrapper function in DEFFNXTYPE.  However, in
- * all our cases so far, the supplied function is static and not used
- * otherwise, so the compiler can merge it with the wrapper function
- * if the optimizer is good enough.
+ * Because we need a single, consistent type for the descriptor structure
+ * field, we use the function pointer type that uses void*, and create a
+ * wrapper function in DEFFNXTYPE.  The supplied function is static and not
+ * used otherwise, so the compiler can merge it with the wrapper function if
+ * the optimizer is good enough.
  */
-#define DEFFNTYPE(DESCNAME, CTYPENAME, ENCFN)                   \
-    typedef CTYPENAME aux_typedefname_##DESCNAME;               \
-    const struct atype_info krb5int_asn1type_##DESCNAME = {     \
-        atype_fn, sizeof(CTYPENAME), ENCFN,                     \
+#define DEFPRIMITIVETYPE(DESCNAME, CTYPENAME, ENCFN, TAG)               \
+    typedef CTYPENAME aux_typedefname_##DESCNAME;                       \
+    static asn1_error_code                                              \
+    aux_encfn_##DESCNAME(asn1buf *buf, const void *val,                 \
+                         unsigned int *retlen)                          \
+    {                                                                   \
+        return ENCFN(buf,                                               \
+                     (const aux_typedefname_##DESCNAME *)val,           \
+                     retlen);                                           \
+    }                                                                   \
+    static const struct primitive_info aux_info_##DESCNAME = {          \
+        aux_encfn_##DESCNAME, TAG                                       \
+    };                                                                  \
+    const struct atype_info krb5int_asn1type_##DESCNAME = {             \
+        atype_primitive, sizeof(CTYPENAME), &aux_info_##DESCNAME        \
     }
-#define DEFFNXTYPE(DESCNAME, CTYPENAME, ENCFN)                  \
-    typedef CTYPENAME aux_typedefname_##DESCNAME;               \
-    static asn1_error_code                                      \
-    aux_encfn_##DESCNAME(asn1buf *buf, const void *val,         \
-                         unsigned int *retlen)                  \
-    {                                                           \
-        return ENCFN(buf,                                       \
-                     (const aux_typedefname_##DESCNAME *)val,   \
-                     retlen);                                   \
-    }                                                           \
-    const struct atype_info krb5int_asn1type_##DESCNAME = {     \
-        atype_fn, sizeof(CTYPENAME), aux_encfn_##DESCNAME,      \
+/* Define a type using an explicit (with tag) encoder function. */
+#define DEFFNTYPE(DESCNAME, CTYPENAME, ENCFN)                           \
+    typedef CTYPENAME aux_typedefname_##DESCNAME;                       \
+    static const struct fn_info aux_info_##DESCNAME = {                 \
+        ENCFN                                                           \
+    };                                                                  \
+    const struct atype_info krb5int_asn1type_##DESCNAME = {             \
+        atype_fn, sizeof(CTYPENAME), &aux_info_##DESCNAME               \
     }
 /*
  * XXX The handling of data+length fields really needs reworking.
@@ -368,67 +331,85 @@ struct atype_info {
  * string-encoding primitives work.  So be it.
  */
 #ifdef POINTERS_ARE_ALL_THE_SAME
-#define DEFFNLENTYPE(DESCNAME, CTYPENAME, ENCFN)                \
+#define DEFSTRINGTYPE(DESCNAME, CTYPENAME, ENCFN, TAGVAL)       \
     typedef CTYPENAME aux_typedefname_##DESCNAME;               \
+    static const struct string_info aux_info_##DESCNAME = {     \
+        ENCFN, NULL, TAGVAL                                     \
+    }                                                           \
     const struct atype_info krb5int_asn1type_##DESCNAME = {     \
-        atype_fn_len, 0, 0, ENCFN,                              \
+        atype_string, 0, &aux_info_##DESCNAME                   \
     }
 #else
-#define DEFFNLENTYPE(DESCNAME, CTYPENAME, ENCFN)                \
+#define DEFSTRINGTYPE(DESCNAME, CTYPENAME, ENCFN, TAGVAL)       \
     typedef CTYPENAME aux_typedefname_##DESCNAME;               \
     static const void *loadptr_for_##DESCNAME(const void *pv)   \
     {                                                           \
         const aux_typedefname_##DESCNAME *p = pv;               \
         return *p;                                              \
     }                                                           \
+    static const struct string_info aux_info_##DESCNAME = {     \
+        ENCFN, loadptr_for_##DESCNAME, TAGVAL                   \
+    };                                                          \
     const struct atype_info krb5int_asn1type_##DESCNAME = {     \
-        atype_fn_len, 0, 0, ENCFN,                              \
-        loadptr_for_##DESCNAME                                  \
+        atype_string, 0, &aux_info_##DESCNAME                   \
     }
 #endif
+/* Not used enough to justify a POINTERS_ARE_ALL_THE_SAME version. */
+#define DEFDERTYPE(DESCNAME, CTYPENAME)                         \
+    typedef CTYPENAME aux_typedefname_##DESCNAME;               \
+    static const void *loadptr_for_##DESCNAME(const void *pv)   \
+    {                                                           \
+        const aux_typedefname_##DESCNAME *p = pv;               \
+        return *p;                                              \
+    }                                                           \
+    static const struct ptr_info aux_info_##DESCNAME = {        \
+        loadptr_for_##DESCNAME                                  \
+    };                                                          \
+    const struct atype_info krb5int_asn1type_##DESCNAME = {     \
+        atype_der, 0, &aux_info_##DESCNAME                      \
+    }
 /*
  * A sequence, defined by the indicated series of fields, and an
  * optional function indicating which fields are present.
  */
-#define DEFSEQTYPE(DESCNAME, CTYPENAME, FIELDS, OPT)            \
-    typedef CTYPENAME aux_typedefname_##DESCNAME;               \
-    static const struct seq_info aux_seqinfo_##DESCNAME = {     \
-        OPT, FIELDS, sizeof(FIELDS)/sizeof(FIELDS[0])           \
-    };                                                          \
-    const struct atype_info krb5int_asn1type_##DESCNAME = {     \
-        atype_sequence, sizeof(CTYPENAME), 0,0,0,0,             \
-        &aux_seqinfo_##DESCNAME,                                \
+#define DEFSEQTYPE(DESCNAME, CTYPENAME, FIELDS, OPT)                    \
+    typedef CTYPENAME aux_typedefname_##DESCNAME;                       \
+    static const struct seq_info aux_seqinfo_##DESCNAME = {             \
+        OPT, FIELDS, sizeof(FIELDS)/sizeof(FIELDS[0])                   \
+    };                                                                  \
+    const struct atype_info krb5int_asn1type_##DESCNAME = {             \
+        atype_sequence, sizeof(CTYPENAME), &aux_seqinfo_##DESCNAME      \
+    }
+/* A choice, selected from the indicated series of fields. */
+#define DEFCHOICETYPE(DESCNAME, CTYPENAME, FIELDS)                      \
+    typedef CTYPENAME aux_typedefname_##DESCNAME;                       \
+    static const struct seq_info aux_seqinfo_##DESCNAME = {             \
+        NULL, FIELDS, sizeof(FIELDS)/sizeof(FIELDS[0])                  \
+    };                                                                  \
+    const struct atype_info krb5int_asn1type_##DESCNAME = {             \
+        atype_choice, sizeof(CTYPENAME), &aux_seqinfo_##DESCNAME        \
     }
 /* Integer types.  */
-#define DEFINTTYPE(DESCNAME, CTYPENAME)                                 \
-    typedef CTYPENAME aux_typedefname_##DESCNAME;                       \
-    static asn1_intmax loadint_##DESCNAME(const void *p)                \
-    {                                                                   \
-        assert(sizeof(CTYPENAME) <= sizeof(asn1_intmax));               \
-        return *(const aux_typedefname_##DESCNAME *)p;                  \
-    }                                                                   \
-    const struct atype_info krb5int_asn1type_##DESCNAME = {             \
-        atype_int, sizeof(CTYPENAME), 0, 0, 0, 0, 0, 0, 0, 0, 0,        \
-        loadint_##DESCNAME, 0,                                          \
+#define DEFINTTYPE(DESCNAME, CTYPENAME)                         \
+    typedef CTYPENAME aux_typedefname_##DESCNAME;               \
+    const struct atype_info krb5int_asn1type_##DESCNAME = {     \
+        atype_int, sizeof(CTYPENAME), NULL                      \
     }
 #define DEFUINTTYPE(DESCNAME, CTYPENAME)                        \
     typedef CTYPENAME aux_typedefname_##DESCNAME;               \
-    static asn1_uintmax loaduint_##DESCNAME(const void *p)      \
-    {                                                           \
-        assert(sizeof(CTYPENAME) <= sizeof(asn1_uintmax));      \
-        return *(const aux_typedefname_##DESCNAME *)p;          \
-    }                                                           \
     const struct atype_info krb5int_asn1type_##DESCNAME = {     \
-        atype_uint, sizeof(CTYPENAME), 0, 0, 0, 0, 0, 0, 0, 0,  \
-        0, 0, loaduint_##DESCNAME,                              \
+        atype_uint, sizeof(CTYPENAME), NULL                     \
     }
 /* Pointers to other types, to be encoded as those other types.  */
 #ifdef POINTERS_ARE_ALL_THE_SAME
 #define DEFPTRTYPE(DESCNAME,BASEDESCNAME)                               \
     typedef aux_typedefname_##BASEDESCNAME * aux_typedefname_##DESCNAME; \
+    static const struct ptr_info aux_info_##DESCNAME = {                \
+        NULL, &krb5int_asn1type_##BASEDESCNAME                          \
+    };                                                                  \
     const struct atype_info krb5int_asn1type_##DESCNAME = {             \
-        atype_ptr, sizeof(aux_typedefname_##DESCNAME), 0, 0, 0,         \
-        &krb5int_asn1type_##BASEDESCNAME, 0                             \
+        atype_ptr, sizeof(aux_typedefname_##DESCNAME),                  \
+        &aux_info_##DESCNAME                                            \
     }
 #else
 #define DEFPTRTYPE(DESCNAME,BASEDESCNAME)                               \
@@ -441,10 +422,13 @@ struct atype_info {
         retptr = *inptr;                                                \
         return retptr;                                                  \
     }                                                                   \
-    const struct atype_info krb5int_asn1type_##DESCNAME = {             \
-        atype_ptr, sizeof(aux_typedefname_##DESCNAME), 0, 0,            \
+    static const struct ptr_info aux_info_##DESCNAME = {                \
         loadptr_for_##BASEDESCNAME##_from_##DESCNAME,                   \
-        &krb5int_asn1type_##BASEDESCNAME, 0                             \
+        &krb5int_asn1type_##BASEDESCNAME                                \
+    };                                                                  \
+    const struct atype_info krb5int_asn1type_##DESCNAME = {             \
+        atype_ptr, sizeof(aux_typedefname_##DESCNAME),                  \
+        &aux_info_##DESCNAME                                            \
     }
 #endif
 /*
@@ -463,18 +447,14 @@ struct atype_info {
     typedef aux_typedefname_##BASEDESCNAME aux_typedefname_##DESCNAME;  \
     const struct atype_info krb5int_asn1type_##DESCNAME = {             \
         atype_nullterm_sequence_of, sizeof(aux_typedefname_##DESCNAME), \
-        0, 0,                                                           \
-        0 /* loadptr */,                                                \
-        &krb5int_asn1type_##BASEDESCNAME, 0                             \
+        &krb5int_asn1type_##BASEDESCNAME                                \
     }
 #define DEFNONEMPTYNULLTERMSEQOFTYPE(DESCNAME,BASEDESCNAME)             \
     typedef aux_typedefname_##BASEDESCNAME aux_typedefname_##DESCNAME;  \
     const struct atype_info krb5int_asn1type_##DESCNAME = {             \
         atype_nonempty_nullterm_sequence_of,                            \
         sizeof(aux_typedefname_##DESCNAME),                             \
-        0, 0,                                                           \
-        0 /* loadptr */,                                                \
-        &krb5int_asn1type_##BASEDESCNAME, 0                             \
+        &krb5int_asn1type_##BASEDESCNAME                                \
     }
 /*
  * Encode a thing (probably sub-fields within the structure) as a
@@ -484,27 +464,35 @@ struct atype_info {
     typedef CTYPENAME aux_typedefname_##DESCNAME;                       \
     static const struct field_info aux_fieldinfo_##DESCNAME = FIELDINFO; \
     const struct atype_info krb5int_asn1type_##DESCNAME = {             \
-        atype_field, sizeof(CTYPENAME), 0, 0, 0, 0, 0,                  \
-        &aux_fieldinfo_##DESCNAME                                       \
+        atype_field, sizeof(CTYPENAME), &aux_fieldinfo_##DESCNAME       \
     }
-/* Objects with an APPLICATION tag added.  */
-#define DEFAPPTAGGEDTYPE(DESCNAME, TAG, BASEDESC)                       \
+/* Objects with an explicit or implicit tag.  (Implicit tags will ignore the
+ * construction field.) */
+#define DEFTAGGEDTYPE(DESCNAME, CLASS, CONSTRUCTION, TAG, IMPLICIT, BASEDESC) \
     typedef aux_typedefname_##BASEDESC aux_typedefname_##DESCNAME;      \
+    static const struct tagged_info aux_info_##DESCNAME = {             \
+        TAG, CLASS, CONSTRUCTION, IMPLICIT, &krb5int_asn1type_##BASEDESC \
+    };                                                                  \
     const struct atype_info krb5int_asn1type_##DESCNAME = {             \
         atype_tagged_thing, sizeof(aux_typedefname_##DESCNAME),         \
-        0, 0, 0, &krb5int_asn1type_##BASEDESC, 0, 0, TAG, APPLICATION,  \
-        CONSTRUCTED                                                     \
+        &aux_info_##DESCNAME                                            \
     }
+/* Objects with an explicit APPLICATION tag added.  */
+#define DEFAPPTAGGEDTYPE(DESCNAME, TAG, BASEDESC)                       \
+        DEFTAGGEDTYPE(DESCNAME, APPLICATION, CONSTRUCTED, TAG, 0, BASEDESC)
 
 /**
  * An encoding wrapped in an octet string
  */
 #define DEFOCTETWRAPTYPE(DESCNAME, BASEDESC)                            \
     typedef aux_typedefname_##BASEDESC aux_typedefname_##DESCNAME;      \
+    static const struct tagged_info aux_info_##DESCNAME = {             \
+        ASN1_OCTETSTRING, UNIVERSAL, PRIMITIVE, 0,                      \
+        &krb5int_asn1type_##BASEDESC                                    \
+    };                                                                  \
     const struct atype_info krb5int_asn1type_##DESCNAME = {             \
         atype_tagged_thing, sizeof(aux_typedefname_##DESCNAME),         \
-        0, 0, 0, &krb5int_asn1type_##BASEDESC, 0, 0, ASN1_OCTETSTRING,  \
-        UNIVERSAL, PRIMITIVE                                            \
+        &aux_info_##DESCNAME                                            \
     }
 
 /*
@@ -522,24 +510,11 @@ struct atype_info {
     typedef CTYPENAME aux_typedefname_##DESCNAME;               \
     extern const struct atype_info krb5int_asn1type_##DESCNAME
 
-/*
- * Create a partial-encoding function by the indicated name, for the
- * indicated type.  Should only be needed until we've converted all of
- * the encoders, then everything should use descriptor tables.
- */
-extern asn1_error_code
-krb5int_asn1_encode_a_thing(asn1buf *buf, const void *val,
-                            const struct atype_info *a, unsigned int *retlen);
-#define MAKE_ENCFN(FNAME,DESC)                                          \
-    static asn1_error_code FNAME(asn1buf *buf,                          \
-                                 const aux_typedefname_##DESC *val,     \
-                                 unsigned int *retlen)                  \
-    {                                                                   \
-        return krb5int_asn1_encode_a_thing(buf, val,                    \
-                                           &krb5int_asn1type_##DESC,    \
-                                           retlen);                     \
-    }                                                                   \
-    extern int dummy /* gobble semicolon */
+/* Partially encode the contents of a type and return its tag information.
+ * Used only by asn1_encode_kdc_req_body. */
+asn1_error_code
+krb5int_asn1_encode_type(asn1buf *buf, const void *val,
+                         const struct atype_info *a, taginfo *rettag);
 
 /*
  * Sequence field descriptor.
@@ -570,12 +545,20 @@ enum field_type {
      * string would be handled as field_normal.)
      */
     field_string,
+    /* Insert a DER encoding given by the pointer and length. */
+    field_der,
     /*
      * LENOFF indicates a value describing the length of the array at
      * DATAOFF, encoded as a sequence-of with the element type
      * described by ATYPE.
      */
     field_sequenceof_len,
+    /*
+     * LENOFF indicates a distinguisher and DATAOFF indicates a union base
+     * address.  ATYPE is an atype_choice type pointing to a seq_info
+     * containing a field type for each choice element.
+     */
+    field_choice,
     /* Unused except for range checking.  */
     field_max
 };
@@ -596,7 +579,9 @@ struct field_info {
      * to the encoding of the thing.  (XXX This would encode more
      * compactly as an unsigned bitfield value tagnum+1, with 0=no
      * tag.)  The tag is omitted for optional fields that are not
-     * present.
+     * present.  If tag_implicit is set, then the context tag replaces
+     * the outer tag of the field, and uses the same construction bit
+     * as the outer tag would have used.
      *
      * It's a bit illogical to combine the tag and other field info,
      * since really a sequence field could have zero or several
@@ -607,6 +592,7 @@ struct field_info {
      * means skip tagging).
      */
     signed int tag : 5;
+    unsigned int tag_implicit : 1;
 
     /*
      * If OPT is non-negative and the sequence header structure has a
@@ -653,13 +639,13 @@ struct field_info {
  * Normal or optional sequence fields at a particular offset, encoded
  * as indicated by the listed DESCRiptor.
  */
-#define FIELDOF_OPT(TYPE,DESCR,FIELDNAME,TAG,OPT)                       \
+#define FIELDOF_OPT(TYPE,DESCR,FIELDNAME,TAG,IMPLICIT,OPT)              \
     {                                                                   \
         field_normal, OFFOF(TYPE, FIELDNAME, aux_typedefname_##DESCR),  \
-            0, TAG, OPT, &krb5int_asn1type_##DESCR                      \
+            0, TAG, IMPLICIT, OPT, &krb5int_asn1type_##DESCR            \
             }
-#define FIELDOF_NORM(TYPE,DESCR,FIELDNAME,TAG)  \
-    FIELDOF_OPT(TYPE,DESCR,FIELDNAME,TAG,-1)
+#define FIELDOF_NORM(TYPE,DESCR,FIELDNAME,TAG,IMPLICIT) \
+    FIELDOF_OPT(TYPE,DESCR,FIELDNAME,TAG,IMPLICIT,-1)
 /*
  * If encoding a subset of the fields of the current structure (for
  * example, a flat structure describing data that gets encoded as a
@@ -667,47 +653,70 @@ struct field_info {
  * field name(s), and the indicated type descriptor must support the
  * current struct type.
  */
-#define FIELDOF_ENCODEAS(TYPE,DESCR,TAG)        \
-    FIELDOF_ENCODEAS_OPT(TYPE,DESCR,TAG,-1)
-#define FIELDOF_ENCODEAS_OPT(TYPE,DESCR,TAG,OPT)                        \
+#define FIELDOF_ENCODEAS(TYPE,DESCR,TAG,IMPLICIT)       \
+    FIELDOF_ENCODEAS_OPT(TYPE,DESCR,TAG,IMPLICIT,-1)
+#define FIELDOF_ENCODEAS_OPT(TYPE,DESCR,TAG,IMPLICIT,OPT)               \
     {                                                                   \
         field_normal,                                                   \
             0 * sizeof(0 ? (TYPE *)0 : (aux_typedefname_##DESCR *) 0),  \
-            0, TAG, OPT, &krb5int_asn1type_##DESCR                      \
+            0, TAG, IMPLICIT, OPT, &krb5int_asn1type_##DESCR            \
             }
 
 /*
  * Reinterpret some subset of the structure itself as something
  * else.
  */
-#define FIELD_SELF(DESCR, TAG)                                  \
-    { field_normal, 0, 0, TAG, -1, &krb5int_asn1type_##DESCR }
+#define FIELD_SELF(DESCR, TAG, IMPLICIT)                        \
+    { field_normal, 0, 0, TAG, IMPLICIT, -1, &krb5int_asn1type_##DESCR }
 
-#define FIELDOF_OPTSTRINGL(STYPE,DESC,PTRFIELD,LENDESC,LENFIELD,TAG,OPT) \
+#define FIELDOF_OPTSTRINGL(STYPE,DESC,PTRFIELD,LENDESC,LENFIELD,TAG,IMP,OPT) \
     {                                                                   \
         field_string,                                                   \
             OFFOF(STYPE, PTRFIELD, aux_typedefname_##DESC),             \
             OFFOF(STYPE, LENFIELD, aux_typedefname_##LENDESC),          \
-            TAG, OPT, &krb5int_asn1type_##DESC, &krb5int_asn1type_##LENDESC \
+            TAG, IMP, OPT,                                              \
+            &krb5int_asn1type_##DESC, &krb5int_asn1type_##LENDESC       \
             }
-#define FIELDOF_OPTSTRING(STYPE,DESC,PTRFIELD,LENFIELD,TAG,OPT)         \
-    FIELDOF_OPTSTRINGL(STYPE,DESC,PTRFIELD,uint,LENFIELD,TAG,OPT)
-#define FIELDOF_STRINGL(STYPE,DESC,PTRFIELD,LENDESC,LENFIELD,TAG)       \
-    FIELDOF_OPTSTRINGL(STYPE,DESC,PTRFIELD,LENDESC,LENFIELD,TAG,-1)
-#define FIELDOF_STRING(STYPE,DESC,PTRFIELD,LENFIELD,TAG)        \
-    FIELDOF_OPTSTRING(STYPE,DESC,PTRFIELD,LENFIELD,TAG,-1)
-#define FIELD_INT_IMM(VALUE,TAG)                \
-    { field_immediate, VALUE, 0, TAG, -1, 0, }
+#define FIELDOF_OPTSTRING(STYPE,DESC,PTRFIELD,LENFIELD,TAG,IMPLICIT,OPT) \
+    FIELDOF_OPTSTRINGL(STYPE,DESC,PTRFIELD,uint,LENFIELD,TAG,IMPLICIT,OPT)
+#define FIELDOF_STRINGL(STYPE,DESC,PTRFIELD,LENDESC,LENFIELD,TAG,IMPLICIT) \
+    FIELDOF_OPTSTRINGL(STYPE,DESC,PTRFIELD,LENDESC,LENFIELD,TAG,IMPLICIT,-1)
+#define FIELDOF_STRING(STYPE,DESC,PTRFIELD,LENFIELD,TAG,IMPLICIT)       \
+    FIELDOF_OPTSTRING(STYPE,DESC,PTRFIELD,LENFIELD,TAG,IMPLICIT,-1)
+#define FIELD_INT_IMM(VALUE,TAG,IMPLICIT)                       \
+    { field_immediate, VALUE, 0, TAG, IMPLICIT, -1, 0, }
 
-#define FIELDOF_SEQOF_LEN(STYPE,DESC,PTRFIELD,LENFIELD,LENTYPE,TAG)     \
+#define FIELDOF_OPTDER(STYPE,DESC,PTRFIELD,LENFIELD,LENTYPE,TAG,IMPLICIT,OPT) \
+    { field_der,                                                        \
+            OFFOF(STYPE, PTRFIELD, aux_typedefname_##DESC),             \
+            OFFOF(STYPE, LENFIELD, aux_typedefname_##LENTYPE),          \
+            TAG, IMPLICIT, OPT,                                         \
+            &krb5int_asn1type_##DESC, &krb5int_asn1type_##LENTYPE       \
+    }
+#define FIELDOF_DER(STYPE,DESC,PTRFIELD,LENFIELD,LENTYPE,TAG,IMPLICIT)  \
+    FIELDOF_OPTDER(STYPE,DESC,PTRFIELD,LENFIELD,LENTYPE,TAG,IMPLICIT,-1)
+
+#define FIELDOF_SEQOF_LEN(STYPE,DESC,PTRFIELD,LENFIELD,LENTYPE,TAG,IMPLICIT) \
     {                                                                   \
         field_sequenceof_len,                                           \
             OFFOF(STYPE, PTRFIELD, aux_typedefname_##DESC),             \
             OFFOF(STYPE, LENFIELD, aux_typedefname_##LENTYPE),          \
-            TAG, -1, &krb5int_asn1type_##DESC, &krb5int_asn1type_##LENTYPE \
+            TAG, IMPLICIT, -1,                                          \
+            &krb5int_asn1type_##DESC, &krb5int_asn1type_##LENTYPE       \
             }
-#define FIELDOF_SEQOF_INT32(STYPE,DESC,PTRFIELD,LENFIELD,TAG)   \
-    FIELDOF_SEQOF_LEN(STYPE,DESC,PTRFIELD,LENFIELD,int32,TAG)
+#define FIELDOF_SEQOF_INT32(STYPE,DESC,PTRFIELD,LENFIELD,TAG,IMPLICIT)  \
+    FIELDOF_SEQOF_LEN(STYPE,DESC,PTRFIELD,LENFIELD,int32,TAG,IMPLICIT)
+
+#define FIELDOF_OPTCHOICE(STYPE,DESC,PTRFIELD,CHOICEFIELD,LENTYPE,TAG,OPT) \
+    { \
+        field_choice,                                                   \
+            OFFOF(STYPE, PTRFIELD, aux_typedefname_##DESC),             \
+            OFFOF(STYPE, CHOICEFIELD, aux_typedefname_##LENTYPE),       \
+            TAG, 0, OPT,                                                \
+            &krb5int_asn1type_##DESC, &krb5int_asn1type_##LENTYPE       \
+            }
+#define FIELDOF_CHOICE(STYPE,DESC,PTRFIELD,CHOICEFIELD,LENTYPE,TAG)     \
+    FIELDOF_OPTCHOICE(STYPE,DESC,PTRFIELD,CHOICEFIELD,LENTYPE,TAG,-1)
 
 struct seq_info {
     /*

@@ -917,46 +917,6 @@ asn1_decode_etype_info2(asn1buf *buf, krb5_etype_info_entry ***val ,
 }
 
 asn1_error_code
-asn1_decode_passwdsequence(asn1buf *buf, passwd_phrase_element *val)
-{
-    setup();
-    val->passwd = NULL;
-    val->phrase = NULL;
-    { begin_structure();
-        alloc_data(val->passwd);
-        get_lenfield(val->passwd->length,val->passwd->data,
-                     0,asn1_decode_charstring);
-        val->passwd->magic = KV5M_DATA;
-        alloc_data(val->phrase);
-        get_lenfield(val->phrase->length,val->phrase->data,
-                     1,asn1_decode_charstring);
-        val->phrase->magic = KV5M_DATA;
-        end_structure();
-        val->magic = KV5M_PASSWD_PHRASE_ELEMENT;
-    }
-    return 0;
-error_out:
-    krb5_free_data(NULL, val->passwd);
-    krb5_free_data(NULL, val->phrase);
-    val->passwd = NULL;
-    val->phrase = NULL;
-    return 0;
-}
-
-asn1_error_code
-asn1_decode_passwdsequence_ptr(asn1buf *buf, passwd_phrase_element **valptr)
-{
-    decode_ptr(passwd_phrase_element *, asn1_decode_passwdsequence);
-}
-
-asn1_error_code
-asn1_decode_sequence_of_passwdsequence(asn1buf *buf,
-                                       passwd_phrase_element ***val)
-{
-    decode_array_body(passwd_phrase_element,asn1_decode_passwdsequence_ptr,
-                      krb5_free_passwd_phrase_element);
-}
-asn1_error_code
 asn1_decode_setpw_req(asn1buf *buf, krb5_data *newpasswd,
                       krb5_principal *principal)
 {
@@ -1410,7 +1370,6 @@ asn1_decode_pk_authenticator_draft9(asn1buf *buf,
 {
     setup();
     val->kdcName = NULL;
-    val->kdcRealm.data = NULL;
     { begin_structure();
         alloc_principal(val->kdcName);
         get_field(val->kdcName, 0, asn1_decode_principal_name);
@@ -1556,11 +1515,8 @@ asn1_decode_kdc_dh_key_info(asn1buf *buf, krb5_kdc_dh_key_info *val)
     setup();
     val->subjectPublicKey.data = NULL;
     { begin_structure();
-        retval = asn1buf_remove_charstring(&subbuf, taglen,
-                                           &val->subjectPublicKey.data);
-        if (retval) clean_return(retval);
-        val->subjectPublicKey.length = taglen;
-        next_tag();
+        get_lenfield(val->subjectPublicKey.length, val->subjectPublicKey.data,
+                     0, asn1_decode_bitstring);
         get_field(val->nonce, 1, asn1_decode_int32);
         opt_field(val->dhKeyExpiration, 2, asn1_decode_kerberos_time, 0);
         end_structure();

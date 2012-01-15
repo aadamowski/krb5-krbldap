@@ -553,62 +553,12 @@ decode_krb5_authdata(const krb5_data *code, krb5_authdata ***repptr)
 }
 
 krb5_error_code
-decode_krb5_pwd_sequence(const krb5_data *code, passwd_phrase_element **repptr)
-{
-    setup_buf_only(passwd_phrase_element *);
-    alloc_field(rep);
-    retval = asn1_decode_passwdsequence(&buf,rep);
-    if (retval) clean_return(retval);
-    cleanup(free);
-}
-
-krb5_error_code
-decode_krb5_pwd_data(const krb5_data *code, krb5_pwd_data **repptr)
-{
-    setup(krb5_pwd_data *);
-    alloc_field(rep);
-    clear_field(rep,element);
-    { begin_structure();
-        get_field(rep->sequence_count,0,asn1_decode_int);
-        get_field(rep->element,1,asn1_decode_sequence_of_passwdsequence);
-        rep->magic = KV5M_PWD_DATA;
-        end_structure (); }
-    cleanup_manual();
-error_out:
-    krb5_free_pwd_data(NULL, rep);
-    return retval;
-}
-
-krb5_error_code
 decode_krb5_padata_sequence(const krb5_data *code, krb5_pa_data ***repptr)
 {
     setup_buf_only(krb5_pa_data **);
     retval = asn1_decode_sequence_of_pa_data(&buf,&rep);
     if (retval) clean_return(retval);
     cleanup_none();             /* we're not allocating anything here */
-}
-
-krb5_error_code
-decode_krb5_alt_method(const krb5_data *code, krb5_alt_method **repptr)
-{
-    setup(krb5_alt_method *);
-    alloc_field(rep);
-    clear_field(rep,data);
-    { begin_structure();
-        get_field(rep->method,0,asn1_decode_int32);
-        if (tagnum == 1) {
-            get_lenfield(rep->length,rep->data,1,asn1_decode_octetstring);
-        } else {
-            rep->length = 0;
-            rep->data = 0;
-        }
-        rep->magic = KV5M_ALT_METHOD;
-        end_structure();
-    }
-    cleanup_manual();
-error_out:
-    krb5_free_alt_method(NULL, rep);
-    return retval;
 }
 
 krb5_error_code
@@ -663,18 +613,6 @@ decode_krb5_pa_enc_ts(const krb5_data *code, krb5_pa_enc_ts **repptr)
 }
 
 krb5_error_code
-decode_krb5_sam_challenge(const krb5_data *code, krb5_sam_challenge **repptr)
-{
-    setup_buf_only(krb5_sam_challenge *);
-    alloc_field(rep);
-
-    retval = asn1_decode_sam_challenge(&buf,rep);
-    if (retval) clean_return(retval);
-
-    cleanup(free);
-}
-
-krb5_error_code
 decode_krb5_sam_challenge_2(const krb5_data *code,
                             krb5_sam_challenge_2 **repptr)
 {
@@ -701,31 +639,6 @@ decode_krb5_sam_challenge_2_body(const krb5_data *code,
 }
 
 krb5_error_code
-decode_krb5_enc_sam_key(const krb5_data *code, krb5_sam_key **repptr)
-{
-    setup_buf_only(krb5_sam_key *);
-    alloc_field(rep);
-
-    retval = asn1_decode_enc_sam_key(&buf,rep);
-    if (retval) clean_return(retval);
-
-    cleanup(free);
-}
-
-krb5_error_code
-decode_krb5_enc_sam_response_enc(const krb5_data *code,
-                                 krb5_enc_sam_response_enc **repptr)
-{
-    setup_buf_only(krb5_enc_sam_response_enc *);
-    alloc_field(rep);
-
-    retval = asn1_decode_enc_sam_response_enc(&buf,rep);
-    if (retval) clean_return(retval);
-
-    cleanup(free);
-}
-
-krb5_error_code
 decode_krb5_enc_sam_response_enc_2(const krb5_data *code,
                                    krb5_enc_sam_response_enc_2 **repptr)
 {
@@ -739,19 +652,6 @@ decode_krb5_enc_sam_response_enc_2(const krb5_data *code,
 }
 
 krb5_error_code
-decode_krb5_sam_response(const krb5_data *code,
-                         krb5_sam_response **repptr)
-{
-    setup_buf_only(krb5_sam_response *);
-    alloc_field(rep);
-
-    retval = asn1_decode_sam_response(&buf,rep);
-    if (retval) clean_return(retval);
-
-    cleanup(free);
-}
-
-krb5_error_code
 decode_krb5_sam_response_2(const krb5_data *code,
                            krb5_sam_response_2 **repptr)
 {
@@ -759,19 +659,6 @@ decode_krb5_sam_response_2(const krb5_data *code,
     alloc_field(rep);
 
     retval = asn1_decode_sam_response_2(&buf,rep);
-    if (retval) clean_return(retval);
-
-    cleanup(free);
-}
-
-krb5_error_code
-decode_krb5_predicted_sam_response(const krb5_data *code,
-                                   krb5_predicted_sam_response **repptr)
-{
-    setup_buf_only(krb5_predicted_sam_response *);           /* preallocated */
-    alloc_field(rep);
-
-    retval = asn1_decode_predicted_sam_response(&buf,rep);
     if (retval) clean_return(retval);
 
     cleanup(free);

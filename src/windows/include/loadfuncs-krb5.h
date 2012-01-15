@@ -198,18 +198,6 @@ TYPEDEF_FUNC(
 TYPEDEF_FUNC(
     void,
     KRB5_CALLCONV,
-    krb5_free_pwd_data,
-    (krb5_context, krb5_pwd_data *)
-    );
-TYPEDEF_FUNC(
-    void,
-    KRB5_CALLCONV,
-    krb5_free_pwd_sequences,
-    (krb5_context, passwd_phrase_element * *)
-    );
-TYPEDEF_FUNC(
-    void,
-    KRB5_CALLCONV,
     krb5_free_data,
     (krb5_context, krb5_data *)
     );
@@ -1569,34 +1557,6 @@ TYPEDEF_FUNC(
     );
 
 /* ------------------------------------------------------------------------- */
-
-TYPEDEF_FUNC(
-    krb5_error_code,
-    KRB5_CALLCONV,
-    krb5_realm_iterator_create,
-    (krb5_context context, void **iter_p)
-    );
-
-TYPEDEF_FUNC(
-    krb5_error_code,
-    KRB5_CALLCONV,
-    krb5_realm_iterator,
-    (krb5_context context, void **iter_p, char **ret_realm)
-    );
-
-TYPEDEF_FUNC(
-    void,
-    KRB5_CALLCONV,
-    krb5_realm_iterator_free,
-    (krb5_context context, void **iter_p)
-    );
-
-TYPEDEF_FUNC(
-    void,
-    KRB5_CALLCONV,
-    krb5_free_realm_string,
-    (krb5_context context, char *str)
-    );
 
 TYPEDEF_FUNC(
     krb5_prompt_type*,
