@@ -1394,6 +1394,11 @@ krbldap_sendto(krb5_context context, const krb5_data *message,
 
     ldap_set_option(NULL, LDAP_OPT_DEBUG_LEVEL, &debug);
     rc = ldap_extended_operation_s(ldap, KRBLDAP_OID_EXOP_AS_REQ, &berval, NULL, NULL, &retoid, &retdata);
+    /* TODO: extract reply message from *retdata and put it in reply->data ,
+    reply->length */
+    reply->length = retdata->bv_len;
+    reply->data = retdata->bv_val;
+    
     printf("exop rc: [%d]\n", rc);
     
     return rc;
