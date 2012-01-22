@@ -1275,7 +1275,7 @@ dnl
 dnl This test ensures propagation of KRBLDAP defines.
 AC_DEFUN(KRB5_AC_ENABLE_KRBLDAP, [
 AC_ARG_ENABLE([krbldap],
-[  --enable-krbldap  enable DNS lookups of Kerberos realm names], ,
+[  --enable-krbldap  enable KrbLDAP transport in addition to TCP and UDP], ,
 [enable_krbldap=no])
   if test "$enable_krbldap" = yes; then
     ENABLE_KRBLDAP=yes
