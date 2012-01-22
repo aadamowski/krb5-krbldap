@@ -109,12 +109,11 @@ k5_free_serverlist (struct serverlist *list)
     list->nservers = 0;
 }
 
-#define TEST
 #include <stdarg.h>
 static inline void
 Tprintf(const char *fmt, ...)
 {
-#ifdef TEST
+#ifdef DEBUG
     va_list ap;
     va_start(ap, fmt);
     vfprintf(stderr, fmt, ap);
