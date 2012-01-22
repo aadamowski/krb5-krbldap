@@ -60,10 +60,10 @@
 #define DEFAULT_UDP_PREF_LIMIT   1465
 #define HARD_UDP_LIMIT          32700 /* could probably do 64K-epsilon ? */
 
-#undef DEBUG
+/*#undef DEBUG*/
 
 #ifdef DEBUG
-int krb5int_debug_sendto_kdc = 0;
+int krb5int_debug_sendto_kdc = 1;
 #define debug krb5int_debug_sendto_kdc
 
 static void
@@ -338,15 +338,19 @@ krb5_sendto_kdc(krb5_context context, const krb5_data *message,
 
     retval = k5_locate_kdc(context, realm, &servers, *use_master,
                            tcp_only ? SOCK_STREAM : 0);
-    if (retval)
+    dprint("k5_locate_kdc retval: [%d]\n", retval);
+    
+    if (retval) {
+        dprint("Error [%d], message: [%s]\n", context->err.code, context->err.msg);
         return retval;
+    }
 #ifdef KRB5_KRBLDAP
-    dprint("using krbldap protocol to send kerberos message.");
+    dprint("using krbldap protocol to send kerberos message.\n");
     retval = krbldap_sendto(context, message, &servers, socktype1, socktype2,
                        NULL, reply, NULL, NULL, &server_used,
                        check_for_svc_unavailable, &err);
 #else
-    dprint("using kerberos v5 protocol to send kerberos message.");
+    dprint("using kerberos v5 protocol to send kerberos message.\n");
     retval = k5_sendto(context, message, &servers, socktype1, socktype2,
                        NULL, reply, NULL, NULL, &server_used,
                        check_for_svc_unavailable, &err);
