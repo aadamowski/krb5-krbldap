@@ -1380,31 +1380,69 @@ krbldap_sendto(krb5_context context, const krb5_data *message,
           void *msg_handler_data)
 {
     LDAP *ldap;
+    krb5_boolean done = FALSE;
+    struct server_entry *entry;
     int ldap_version = LDAP_VERSION3;
     struct berval berval;
     struct berval *retdata = NULL;
     char *retoid = NULL;
+    char *hostname = NULL;
+    char ldap_url[max(NI_MAXHOST + NI_MAXSERV + 30, 200)];
+    int s;
+    int port = 0;
     int debug = 0xffffff;
     int rc;
+    int retval = 0;
     
     /* TODO: use *servers */
-    rc = ldap_initialize(&ldap, "ldap://localhost:1389");
-    printf("rc: [%d], LDAP_SUCCESS: [%d]\n", rc, LDAP_SUCCESS);
+    for (s = 0; s < servers->nservers && !done; s++) {
+        entry = &servers->servers[s];
+        hostname = entry->hostname;
+        port = 1389;
+        dprint("Trying server [%s] on port [%d].\n", hostname, port); 
+        if (snprintf(ldap_url, sizeof (ldap_url), "ldap://%s:%d", hostname, port) >= sizeof (ldap_url)) {
+            /* Error, size limit hit */
+            retval = ENOMEM;
+            dprint("LDAP URL size greater than limit\n");
+            goto cleanup;
+        }
+        dprint("LDAP URL: [%s]\n", ldap_url);        
 
-    ldap_set_option(ldap, LDAP_OPT_PROTOCOL_VERSION, &ldap_version);
-    
-    berval.bv_len = message->length;
-    berval.bv_val = message->data;
+        rc = ldap_initialize(&ldap, ldap_url);
+        dprint("rc: [%d], LDAP_SUCCESS: [%d]\n", rc, LDAP_SUCCESS);
 
-    ldap_set_option(NULL, LDAP_OPT_DEBUG_LEVEL, &debug);
-    rc = ldap_extended_operation_s(ldap, KRBLDAP_OID_EXOP_AS_REQ, &berval, NULL, NULL, &retoid, &retdata);
-    /* TODO: extract reply message from *retdata and put it in reply->data ,
-    reply->length */
-    reply->length = retdata->bv_len;
-    reply->data = retdata->bv_val;
-    
-    printf("exop rc: [%d]\n", rc);
-    
-    return rc;
+        ldap_set_option(ldap, LDAP_OPT_PROTOCOL_VERSION, &ldap_version);
+
+        berval.bv_len = message->length;
+        berval.bv_val = message->data;
+
+        reply->length = 0;
+        reply->data = NULL;
+
+        ldap_set_option(NULL, LDAP_OPT_DEBUG_LEVEL, &debug);
+        dprint("Before ldap_extended_operation_s:\n");
+        rc = ldap_extended_operation_s(ldap, KRBLDAP_OID_EXOP_AS_REQ, &berval, NULL, NULL, &retoid, &retdata);
+        dprint("After ldap_extended_operation_s.\n");
+        dprint("exop rc: [%d]\n", rc);
+        if (rc == 0) {
+            *server_used = s;
+            done = TRUE;
+            dprint("Finished processing on server index [%d]. Ending loop.\n", s);
+
+            reply->length = retdata->bv_len;
+            reply->data = malloc(reply->length);
+            if (reply->data == NULL) {
+                /* allocation failure */
+                retval = ENOMEM;
+                goto cleanup;
+            }
+            memcpy(reply->data, retdata->bv_val, retdata->bv_len);
+        }
+    }
+
+cleanup:
+    ber_memfree(retoid);
+    ber_bvfree(retdata);
+    return retval;
 }
 #endif
