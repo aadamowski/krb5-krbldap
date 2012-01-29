@@ -44,23 +44,14 @@ struct dispatch_state {
 };
 
 static void
-finish_dispatch(void *arg, krb5_error_code code, krb5_data *response)
+finish_dispatch(struct dispatch_state *state, krb5_error_code code,
+                krb5_data *response)
 {
-    struct dispatch_state *state = arg;
-    loop_respond_fn oldrespond;
-    void *oldarg;
-
-    assert(state);
-    oldrespond = state->respond;
-    oldarg = state->arg;
-
-#ifndef NOCACHE
-    /* Remove our NULL cache entry to indicate request completion. */
-    kdc_remove_lookaside(kdc_context, state->request);
-#endif
+    loop_respond_fn oldrespond = state->respond;
+    void *oldarg = state->arg;
 
     if (state->is_tcp == 0 && response &&
-        response->length > max_dgram_reply_size) {
+        response->length > (unsigned int)max_dgram_reply_size) {
         krb5_free_data(kdc_context, response);
         response = NULL;
         code = make_too_big_error(&response);
@@ -70,14 +61,27 @@ finish_dispatch(void *arg, krb5_error_code code, krb5_data *response)
                              error_message(code));
     }
 
+    free(state);
+    (*oldrespond)(oldarg, code, response);
+}
+
+static void
+finish_dispatch_cache(void *arg, krb5_error_code code, krb5_data *response)
+{
+    struct dispatch_state *state = arg;
+
 #ifndef NOCACHE
-    /* put the response into the lookaside buffer */
-    else if (!code && response)
+    /* Remove the null cache entry unless we actually want to discard this
+     * request. */
+    if (code != KRB5KDC_ERR_DISCARD)
+        kdc_remove_lookaside(kdc_context, state->request);
+
+    /* Put the response into the lookaside buffer (if we produced one). */
+    if (code == 0 && response != NULL)
         kdc_insert_lookaside(state->request, response);
 #endif
 
-    free(state);
-    (*oldrespond)(oldarg, code, response);
+    finish_dispatch(state, code, response);
 }
 
 void
@@ -110,22 +114,19 @@ dispatch(void *cb, struct sockaddr *local_saddr,
         const char *name = 0;
         char buf[46];
 
-        if (!response || is_tcp != 0 ||
-            response->length <= max_dgram_reply_size) {
-            name = inet_ntop (ADDRTYPE2FAMILY (from->address->addrtype),
-                              from->address->contents, buf, sizeof (buf));
-            if (name == 0)
-                name = "[unknown address type]";
-            if (response)
-                krb5_klog_syslog(LOG_INFO,
-                                 "DISPATCH: repeated (retransmitted?) request "
-                                 "from %s, resending previous response", name);
-            else
-                krb5_klog_syslog(LOG_INFO,
-                                 "DISPATCH: repeated (retransmitted?) request "
-                                 "from %s during request processing, dropping "
-                                 "repeated request", name);
-        }
+        name = inet_ntop (ADDRTYPE2FAMILY (from->address->addrtype),
+                          from->address->contents, buf, sizeof (buf));
+        if (name == 0)
+            name = "[unknown address type]";
+        if (response)
+            krb5_klog_syslog(LOG_INFO,
+                             "DISPATCH: repeated (retransmitted?) request "
+                             "from %s, resending previous response", name);
+        else
+            krb5_klog_syslog(LOG_INFO,
+                             "DISPATCH: repeated (retransmitted?) request "
+                             "from %s during request processing, dropping "
+                             "repeated request", name);
 
         finish_dispatch(state, response ? 0 : KRB5KDC_ERR_DISCARD, response);
         return;
@@ -167,7 +168,7 @@ dispatch(void *cb, struct sockaddr *local_saddr,
              * process_as_req frees the request if it is called
              */
             if (!(retval = setup_server_realm(as_req->server))) {
-                process_as_req(as_req, pkt, from, vctx, finish_dispatch,
+                process_as_req(as_req, pkt, from, vctx, finish_dispatch_cache,
                                state);
                 return;
             }
